@@ -1,0 +1,108 @@
+#!/usr/bin/python3
+import os
+import shutil
+import sys
+import requests
+
+if len(sys.argv) == 1:
+    print(f"usage: {sys.argv[0]} [command]")
+    print(f"commands:")
+    print(f"  install [pkg]\t\t - install the package (alias or git repo)")
+    print(f"  upgrade [pkg]\t\t - update package")
+    print(f"  remove [pkg]\t\t - remove package")
+    print(f"  update\t\t - update aliases")
+    print(f"  repolist\t\t - list local package repositories")
+    exit(1)
+
+def download_aliases():
+    repos = map(lambda repo: repo.split(" "), open("./repolist").read().split("\n"))
+    repos = sorted(repos, key=lambda x: x[0])
+    aliases = {}
+    gcnt = 0
+    for repo in repos:
+        try:
+            print(f"Fetching data from {repo[1]}... ", end='')
+            sys.stdout.flush()
+            r = requests.get(repo[2])
+            r.raise_for_status()
+            cnt = 0
+            for x in r.text.split("\n"):
+                if x.strip() == "":
+                    continue
+                x = x.split(" ")
+                aliases[x[0]] = x[1]
+                cnt += 1
+                gcnt += 1
+            print(f"OK, {cnt} pkg(s)")
+        except Exception as e:
+            print(f"FAIL: {e}")
+    open("./aliases", "w").write("\n".join([" ".join(x) for x in aliases.items()]))
+    print(f"Updated aliases, {gcnt} aliases")
+
+if not os.path.exists("./repolist"):
+    print("First run in this directory. Initializing...")
+    open("./repolist", "w").write("2 RavePM https://raw.githubusercontent.com/Ttimofeyka/RavePM/main/aliases\n1 GeckosRepo https://raw.githubusercontent.com/geckwwo/erpm-repo/main/aliases")
+    download_aliases()
+
+if sys.argv[1] == "install":
+    if len(sys.argv) != 3:
+        print(f"usage: {sys.argv[0]} install [pkg]")
+        exit(1)
+    pkg = sys.argv[2]
+    if not (pkg.startswith("http://github.com/") or pkg.startswith("https://github.com/")):
+        aliases = {x.split(" ")[0]: x.split(" ")[1] for x in open("./aliases").read().split("\n")}
+        if pkg not in aliases:
+            print(f"cannot find alias '{pkg}'")
+            exit(1)
+        pkg = aliases[pkg]
+    if os.path.exists(pkg.split("/")[-1]):
+        print(f"Package is already installed! Use 'upgrade' or 'remove'.")
+        exit(1)
+    print(f"Installing remote {pkg}...")
+    if os.system(f"git clone {pkg}") != 0:
+        print("Failed to install the package.")
+        exit(1)
+    else:
+        print("Done")
+elif sys.argv[1] == "update":
+    download_aliases()
+elif sys.argv[1] == "upgrade":
+    if len(sys.argv) != 3:
+        print(f"usage: {sys.argv[0]} upgrade [pkg]")
+        exit(1)
+    pkg = sys.argv[2]
+    if not os.path.isdir(pkg):
+        print(f"Package does not exist.")
+        exit(1)
+    print(f"Upgrading {pkg}...")
+    if os.system(f"cd {pkg} ; git pull") != 0:
+        print("Failed to install the package.")
+        exit(1)
+    else:
+        print("Done.")
+elif sys.argv[1] == "repolist":
+    repos = map(lambda repo: repo.split(" "), open("./repolist").read().split("\n"))
+    repos = sorted(repos, key=lambda x: x[0], reverse=True)
+    print("Current repositories (sorted by priority):")
+    for repo in repos:
+        print(f"[{repo[0]}] {repo[1]} ({repo[2]})")
+elif sys.argv[1] == "remove":
+    if len(sys.argv) != 3:
+        print(f"usage: {sys.argv[0]} remove [pkg]")
+        exit(1)
+    pkg = sys.argv[2]
+    if not os.path.isdir(pkg):
+        print(f"Package does not exist.")
+        exit(1)
+    print(f"This will irreversibly remove package '{pkg}'. Continue? [Y/n] ", end='')
+    ui = input()
+    if ui not in ('', "y", "Y", "д", "Д"):
+        exit(0)
+    try:
+        shutil.rmtree(pkg)
+    except Exception as e:
+        print(f"Failed to remove the package: {e}")
+        exit(1)
+else:
+    print(f"unknown subcommand '{sys.argv[1]}'")
+    exit(1)
