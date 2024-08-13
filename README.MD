@@ -13,6 +13,7 @@ ERPM was not tested on Windows and will probably require more stuff to work.
 # Using
 Just run
 > $ erpm
+
 to see the options. It will create 'repolist' and 'aliases' files on the first run.
 
 # Licensing
